@@ -1,3 +1,4 @@
+import hashlib
 import json
 import shutil
 import os
@@ -55,11 +56,12 @@ def check_website_status(url):
 def ask_ai_for_progress(text):
     # 使用AI分析进度
     # 检查md5是否存在
-    if os.path.exists(f'cache/ai/{hash(text)}.json'):
-        data=json.loads(open(f'cache/ai/{hash(text)}.json','r',encoding="utf-8").read())
+    md5=hashlib.md5(text.encode()).hexdigest()
+    if os.path.exists(f'cache/ai/{md5}.json'):
+        data=json.loads(open(f'cache/ai/{md5}.json','r',encoding="utf-8").read())
     else:
         data=json.loads(get_chat_gpt_response(text))
-        f=open(f'cache/ai/{hash(text)}.json','w',encoding='utf-8')
+        f=open(f'cache/ai/{md5}.json','w',encoding='utf-8')
         f.write(json.dumps(data))
         f.close()
     return data["progress"],data["status"]

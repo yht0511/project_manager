@@ -79,13 +79,14 @@ def get_project_info(project_name):
     # 获取项目信息
     # Gitlab
     repo_gl=get_project_by_name(project_name)
-    # Github
-    repo_info_gh=get_repo_info_github(project_name)
     # project文件
     project_file_info=json.loads(repo_gl.files.raw(file_path=Monitor_project_file).decode('utf-8'))
+    # Github
+    repo_info_gh=get_repo_info_github(repo_gl.path if not "name" in project_file_info else project_file_info["name"])
     # 合并
     project=project_file_info # 项目信息
-    project["name"]=repo_gl.name if not "name" in project else project["name"] # 若文件指定，则使用文件中的name
+    project["title"]=repo_gl.name if not "title" in project else project["title"]
+    project["name"]=repo_gl.path if not "name" in project else project["name"] # 若文件指定，则使用文件中的name
     project["description"]=project["description"] if "description" in project and project["description"] else (repo_gl.description if repo_gl.description else Default_description) # 若文件指定，则使用文件中的description；否则使用Gitlab中的description；若Gitlab中也没有，则使用默认值
     project["repo"]=repo_gl.http_url_to_repo # Gitlab仓库地址
     project["github_repo"]=get_gh_url(project) if "github_repo" not in project else project["github_repo"] # Github仓库地址; 若文件指定，则使用文件中的github_repo
