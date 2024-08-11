@@ -1,0 +1,15 @@
+{
+    "title":"实验室项目管理器",
+    "name":"Project_Manager",
+    "progress": 40,
+    "status": "开发",
+    "website":"https://teclab.org.cn",
+    "image":"https://raw.githubusercontent.com/yht0511/ImgStorage/main/2024/08/1020240810212130.PNG",
+    "project_manager":{
+        "version":1,
+        "sync":true,
+        "auto_analyze_progress":true
+    }
+}
+
+

@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Teclab-天创实验室</title>
+    <meta name="description" content="Teclab-天创实验室" />
+    <style>
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background-color: #060522;
+      }
+      canvas {
+        border: 1px solid #fff;
+      }
+      @font-face {
+        font-family: "Orbitron";
+        src: url("Orbitron-VariableFont_wght.ttf") format("truetype");
+        font-weight: normal;
+        font-style: normal;
+      }
+      #cpuCanvas {
+        position: absolute;
+        top: 25%;
+      }
+      #logo {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        font-family: "Orbitron", sans-serif;
+        font-weight: bold;
+        font-size: 60px;
+        color: #fff;
+        text-decoration: none;
+      }
+      #aboutButton {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background-color: #060522;
+        color: white;
+        padding: 20px 40px;
+        border: none;
+        border-radius: 5px;
+        font-size: 25px;
+        cursor: pointer;
+        text-decoration: none;
+      }
+      #aboutButton:hover {
+        background-color: #333;
+      }
+      /* Instruction text */
+      .instruction {
+        text-align: center;
+        bottom: 5%;
+        position: absolute;
+        font-size: 20px;
+        margin-top: 20px;
+        color: #ffd700;
+      }
+      /* Project list container */
+      .project-list {
+        padding: 20px;
+        max-width: 1200px;
+        width: 70%;
+        margin: 50px auto; /* 增加了外边距来给动画和项目列表之间一些空间 */
+        position: absolute;
+        top: 100%;
+      }
+
+      /* Individual project container */
+      .project {
+        display: flex;
+        background-color: #00266d;
+        margin-bottom: 20px;
+        padding: 10px;
+        border-radius: 8px;
+        overflow: hidden;
+        color: aliceblue;
+        min-height: 180px;
+        /* max-height: 250px; */
+      }
+
+      .project img {
+        width: 40%;
+        object-fit: contain;
+        max-height: 250px;
+      }
+
+      .project-info {
+        padding: 20px;
+        flex: 1;
+      }
+
+      .project-info h3 {
+        margin: 0 0 10px;
+        font-size: 24px;
+        color: #ffd700;
+      }
+
+      .project-info a {
+        color: #1e90ff;
+        text-decoration: none;
+      }
+
+      .project-info p {
+        margin: 5px 0;
+        /* 超过一行自动隐藏并出现省略号 */
+        width:90%;
+        white-space: nowrap;       /* 强制不换行 */
+        overflow: hidden;          /* 超出部分隐藏 */
+        text-overflow: ellipsis;   /* 超出部分显示省略号 */
+      }
+
+      .progress-bar {
+        width: 100%;
+        background-color: #666;
+        border-radius: 5px;
+        margin-top: 10px;
+      }
+
+      .progress {
+        height: 20px;
+        background-color: #32cd32;
+        border-radius: 5px;
+        line-height: 20px;
+        text-align: center;
+        color: #000;
+      }
+
+      .tail {
+        text-align: center;
+        bottom: 10px;
+        left: 10px;
+        /* font-weight: bold; */
+        font-family: "Orbitron", sans-serif;
+        font-size: 20px;
+        color: #fff;
+      }
+      /* 手机放大 */
+      @media screen and (max-width: 1080px) {
+        #logo {
+          font-size: 70px;
+        }
+        #aboutButton {
+          padding: 15px 30px;
+          font-size: 50px;
+        }
+        .instruction {
+          font-size: 38px;
+          bottom: 30px;
+        }
+        #cpuCanvas {
+          width: 70%;
+        }
+        .project-list {
+          width: 90%;
+        }
+        .project {
+          flex-direction: column;
+          font-size: 40px;
+        }
+        .project img {
+          width: 100%;
+          max-height: 650px;
+        }
+        .project-info h3 {
+          margin: 0 0 10px;
+          font-size: 50px;
+          color: #ffd700;
+        }
+        .progress {
+          height: 40px;
+          background-color: #32cd32;
+          border-radius: 5px;
+          line-height: 40px;
+          text-align: center;
+          color: #000;
+        }
+        .tail {
+          font-size: 40px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Fixed Logo at the top-left corner -->
+    <a id="logo" href="/index.html">Teclab</a>
+
+    <!-- Fixed About Button at the top-right corner -->
+    <a id="aboutButton" href="about.html">关于</a>
+
+    <canvas id="cpuCanvas"></canvas>
+
+    <!-- Instruction text -->
+    <div class="instruction">向下查看实验室项目</div>
+
+    <!-- Project List -->
+    <div class="project-list">
+      <div class="list"></div>
+      <br /><br /><br /><br /><br /><br />
+      <hr />
+      <br />
+      <div class="tail">Teclab 天创实验室 版权所有</div>
+      <div class="tail">联系方式:admin@teclab.org.cn</div>
+    </div>
+
+    <script>
+      // 获取/api/projects的数据
+      fetch("/api/projects")
+        .then((response) => response.json())
+        .then((data) => {
+          const projectList = document.querySelector(".project-list>.list");
+          data.forEach((project) => {
+            const projectElement = document.createElement("div");
+            projectElement.classList.add("project");
+            var html = `
+                        <img src="${project.image}" alt="Project Image">
+                        <div class="project-info">
+                            <h3>${project.title}</h3>
+                            <p><a href="${project.github_repo}" target="_blank">Github</a>`;
+
+            if (project.website)
+              html =
+                html +
+                ` | <a href="${project.website}" target="_blank">Web服务</a></p>`;
+            else html = html + `</p>`;
+
+            html =
+              html +
+              `<p>${project.description}</p>
+                            <p>⭐ Star: ${project.stars} | 🍴 Fork: ${project.forks} | 🐞 Issues: ${project.issues}</p>
+                            <p>上次提交: ${project.commits[0].title}</p>
+                            <p>项目状态: ${project.status} `;
+                            
+            if (project.service_status){
+                if(project.service_status == "Live") html = html + `| 服务状态: ${project.service_status}🟢</p>`;
+                else
+                    html = html + `| 服务状态: ${project.service_status}🔴</p>`;
+            }
+            else html = html + `</p>`;
+
+            html =
+              html +
+              ` 
+                            <div class="progress-bar">
+                                <div class="progress" style="width: ${project.progress}%;">${project.progress}%</div>
+                            </div>
+                        </div>
+                    `;
+            projectElement.innerHTML = html;
+            projectList.appendChild(projectElement);
+          });
+        });
+    </script>
+
+    <script>
+      const canvas = document.getElementById("cpuCanvas");
+      const ctx = canvas.getContext("2d");
+      canvas.width = 500;
+      canvas.height = 500;
+
+      const cpuSize = 300;
+      const cpuX = (canvas.width - cpuSize) / 2;
+      const cpuY = (canvas.height - cpuSize) / 2;
+      const pinLength = 50;
+      const pinWidth = 4;
+      const pinSpacing = 12;
+      const pinCount = Math.floor(cpuSize / pinSpacing);
+
+      let pinHeight = 5;
+      let growing = true;
+
+      const text = "Teclab 天创实验室";
+      let currentText = "";
+      let cursorVisible = true;
+
+      function drawCPU() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = "silver";
+        ctx.fillRect(cpuX, cpuY, cpuSize, cpuSize);
+
+        ctx.fillStyle = "gold";
+        for (let i = 0; i < pinCount; i++) {
+          let pinX = cpuX + i * pinSpacing + pinSpacing / 2;
+          let pinY = cpuY + i * pinSpacing + pinSpacing / 2;
+          ctx.fillRect(pinX, cpuY - pinHeight, pinWidth, pinHeight);
+          ctx.fillRect(pinX, cpuY + cpuSize, pinWidth, pinHeight);
+          ctx.fillRect(cpuX - pinHeight, pinY, pinHeight, pinWidth);
+          ctx.fillRect(cpuX + cpuSize, pinY, pinHeight, pinWidth);
+        }
+
+        ctx.font = "24px Orbitron";
+        ctx.fillStyle = "#000";
+        ctx.fillText(currentText, cpuX + 40, cpuY + cpuSize / 2 + 12);
+
+        if (cursorVisible) {
+          let cursorWidth = ctx.measureText(currentText).width;
+          ctx.fillRect(cpuX + 40 + cursorWidth, cpuY + cpuSize / 2 - 9, 2, 24);
+        }
+      }
+
+      function animatePins() {
+        if (growing) {
+          pinHeight += 0.2;
+          if (pinHeight > pinLength) {
+            growing = false;
+          }
+        } else {
+          pinHeight -= 0.5;
+          if (pinHeight < 5) {
+            growing = true;
+          }
+        }
+        drawCPU();
+        requestAnimationFrame(animatePins);
+      }
+
+      function typeText(index) {
+        if (index < text.length) {
+          currentText += text[index];
+          drawCPU();
+          setTimeout(() => typeText(index + 1), 300);
+        } else {
+          blinkCursor();
+        }
+      }
+
+      function blinkCursor() {
+        cursorVisible = !cursorVisible;
+        drawCPU();
+        setTimeout(blinkCursor, 300);
+      }
+
+      drawCPU();
+      animatePins();
+      setTimeout(() => typeText(0), 1000);
+    </script>
+  </body>
+</html>
