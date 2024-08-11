@@ -11,39 +11,41 @@ from github import Github
 from github import Auth
 import utils
 
-# 临时文件夹
-if not os.path.exists("tmp/"):
-    os.mkdir("tmp/")
-# 数据文件夹
-if not os.path.exists("data/"):
-    os.mkdir("data/")
-# 读取Data
-if os.path.exists(Monitor_projects_file):
-    with open(Monitor_projects_file, "r") as f:
-        Data = json.load(f)
-else:
-    Data = []
+
+
+def init():
+    # 临时文件夹
+    if not os.path.exists("tmp/"):
+        os.mkdir("tmp/")
+    # 数据文件夹
+    if not os.path.exists("data/"):
+        os.mkdir("data/")
+    # 读取Data
+    if os.path.exists(Monitor_projects_file):
+        with open(Monitor_projects_file, "r") as f:
+            Data = json.load(f)
+    else:
+        Data = []
+    # 取消git安全目录检查
+    os.system("git config --global --add safe.directory \"*\"")
+    # 取消ssl验证
+    os.system("git config --global http.sslVerify false")
+    return Data
+
 
 def save_data():
+    global Data
     with open(Monitor_projects_file, "w") as f:
         json.dump(Data, f, indent=4)
+        
 def get_data(name):
+    global Data
     for data in Data:
         if data["name"]==name:
             return data
     return None
 
-# 取消git安全目录检查
-os.system("git config --global --add safe.directory \"*\"")
-# 取消ssl验证
-os.system("git config --global http.sslVerify false")
-
-# 登录
-gl = gitlab.Gitlab(Gitlab_URL, private_token=Gitlab_TOKEN,ssl_verify=False)
-gh = Github(auth=Auth.Token(Github_TOKEN))
-
-def check_project():
-    print(f"开始检查项目...")
+def get_monitored_project():
 
     # 清空tmp文件夹
     for file in os.listdir("tmp/"):
@@ -57,59 +59,80 @@ def check_project():
     for project in projects:
         if project.visibility in Monitor_visibility:
             if not Monitor_user or project.namespace['path'] in Monitor_user:
-                monitored_projects.append(project)
+                # 要求有Monitor_project_file文件
+                try:
+                    project.files.get(file_path=Monitor_project_file,ref='main')
+                except gitlab.exceptions.GitlabGetError:
+                    continue
+                monitored_projects.append(project.name)
 
-    # 获取项目信息
-    projects=[]
-    for project in monitored_projects:
-        # 检查项目是否有项目信息文件
-        try:
-            project.files.get(file_path=Monitor_project_file,ref='main')
-        except gitlab.exceptions.GitlabGetError:
-            continue
-        pj=json.loads(project.files.raw(file_path=Monitor_project_file).decode('utf-8'))
-        pj["name"]=project.name if not "name" in pj else pj["name"]
-        pj["description"]=pj["description"] if "description" in pj and pj["description"] else (project.description if project.description else Default_description)
-        pj["repo"]=project.http_url_to_repo
-        pj["github_repo"]=get_gh_url(pj) if "github_repo" not in pj else pj["github_repo"]
-        pj["namespace"]=project.namespace['name']
-        pj["username"]=project.namespace['path']
-        # 转换时间格式
-        pj["created_time"]=datetime.datetime.strptime(project.created_at, "%Y-%m-%dT%H:%M:%S.%fZ").timestamp()
-        pj["last_activity"]=datetime.datetime.strptime(project.last_activity_at, "%Y-%m-%dT%H:%M:%S.%fZ").timestamp()
-        # 获取项目的commit
-        commits=project.commits.list(all=True)
-        pj["commits"]=[{"title":commit.title, "created_time":datetime.datetime.strptime(commit.created_at.split("+")[0], "%Y-%m-%dT%H:%M:%S.%f").timestamp()} for commit in commits]
-        # 更新项目Github信息
-        pj.update(get_repo_info_github(pj["name"]))
-        projects.append(pj)
-        # 如果有网站,检测服务状态
-        if "website" in pj:
-            pj["service_status"] = "Live" if check_website_status(pj["website"]) else "Down"
-        # 图片
-        pj["image"] = Default_image if "image" not in pj else pj["image"]
+    return monitored_projects
 
-    print(f"共有{len(projects)}个受监测项目")
-    # 更新项目
+def get_project_by_name(name):
+    projects=gl.projects.list(all=True)
     for project in projects:
-        if get_data(project["name"]) and get_data(project["name"])["last_activity"]==project["last_activity"] and get_data(project["name"])["commits"]==project["commits"] and get_data(project["name"])["description"]==project["description"]:
-            # 不需要更新
-            pass 
-        else:
-            # 更新
-            print(f"更新项目{project['name']}")
-            utils.send_email(f"[更新中] 项目{project['name']}", f"项目{project['name']}存在更新,正在同步至Github.")
-            update_git(project)
-            utils.send_email(f"[更新完成] 项目{project['name']}", f"项目{project['name']}已同步至Github.")
-        # 更新项目信息
-        if get_data(project["name"]):
-            Data.remove(get_data(project["name"]))
-        Data.append(project)
-        save_data()
-    
-    print(f"完成.")
-    
-def update_git(project):
+        if project.name==name:
+            return project
+    return None
+
+def get_project_info(project_name):
+    # 获取项目信息
+    # Gitlab
+    repo_gl=get_project_by_name(project_name)
+    # Github
+    repo_info_gh=get_repo_info_github(project_name)
+    # project文件
+    project_file_info=json.loads(repo_gl.files.raw(file_path=Monitor_project_file).decode('utf-8'))
+    # 合并
+    project=project_file_info # 项目信息
+    project["name"]=repo_gl.name if not "name" in project else project["name"] # 若文件指定，则使用文件中的name
+    project["description"]=project["description"] if "description" in project and project["description"] else (repo_gl.description if repo_gl.description else Default_description) # 若文件指定，则使用文件中的description；否则使用Gitlab中的description；若Gitlab中也没有，则使用默认值
+    project["repo"]=repo_gl.http_url_to_repo # Gitlab仓库地址
+    project["github_repo"]=get_gh_url(project) if "github_repo" not in project else project["github_repo"] # Github仓库地址; 若文件指定，则使用文件中的github_repo
+    project["namespace"]=repo_gl.namespace['name'] # 项目所属组织
+    project["username"]=repo_gl.namespace['path'] # 项目所属用户
+    project["image"] = Default_image if "image" not in project else project["image"] # 项目图片; 若文件指定，则使用文件中的image
+    project["readme"] = "README.md" if "readme" not in project else project["readme"] # 项目README; 若文件指定，则使用文件中的readme
+    # 转换时间格式
+    project["created_time"]=datetime.datetime.strptime(repo_gl.created_at, "%Y-%m-%dT%H:%M:%S.%fZ").timestamp()  # 项目创建时间
+    project["last_activity"]=datetime.datetime.strptime(repo_gl.last_activity_at, "%Y-%m-%dT%H:%M:%S.%fZ").timestamp()  # 项目最后活动时间
+    # 获取项目的commit
+    commits=repo_gl.commits.list(all=True)
+    project["commits"]=[{"title":commit.title, "created_time":datetime.datetime.strptime(commit.created_at.split("+")[0], "%Y-%m-%dT%H:%M:%S.%f").timestamp()} for commit in commits]
+    # 更新项目Github信息
+    project.update(repo_info_gh)
+    # 如果有网站,检测服务状态
+    if "website" in project:
+        project["service_status"] = "Live" if utils.check_website_status(project["website"]) else "Down"
+    # 自动分析进度
+    if "project_manager" in project and project["project_manager"]["auto_analyze_progress"]: # 允许自动分析进度
+        text=False
+        try:
+            text=repo_gl.files.raw(file_path=project["readme"]).decode('utf-8')
+        except Exception as e:
+            print(f"Error: {project['name']}没有README.md")
+        if text:
+            project["progress"],project["status"]=utils.ask_ai_for_progress(text)
+    return project
+
+def check_sync(project):
+    if "project_manager" in project and "sync" in project["project_manager"] and not project["project_manager"]["sync"]:
+        return False
+    if get_data(project["name"]) and get_data(project["name"])["last_activity"]==project["last_activity"] and get_data(project["name"])["commits"]==project["commits"] and get_data(project["name"])["description"]==project["description"]:
+        # 不需要更新
+        return False
+    else:
+        return True
+
+def update_data(project):
+    global Data
+    # 更新项目信息
+    if get_data(project["name"]):
+        Data.remove(get_data(project["name"]))
+    Data.append(project)
+    save_data()
+
+def sync_git(project):
     git.Repo.clone_from(get_gl_url(project),"tmp/"+project["name"],allow_unsafe_protocols=True,allow_unsafe_options=True,)
     repo=git.Repo("tmp/"+project["name"])
     # 检测Github上是否存在该项目,不存在则创建
@@ -134,7 +157,6 @@ def update_git(project):
             time.sleep(1)
     print(f"OK.")
 
-
 def get_repo_info_github(name):
     try:
         repo=gh.get_repo(Github_USER+"/"+transform_name(name))
@@ -148,6 +170,7 @@ def get_repo_info_github(name):
         "watchers":repo.subscribers_count,
     }
 
+
 def get_gl_url(project):
     if Follow_repo:
         return project["repo"]
@@ -160,8 +183,7 @@ def get_gh_url(project):
 def transform_name(name):
     return name.replace(" ", "-").lower()
 
-def check_website_status(url):
-    try:
-        return requests.get(url).status_code==200
-    except:
-        return False
+# 登录
+gl = gitlab.Gitlab(Gitlab_URL, private_token=Gitlab_TOKEN,ssl_verify=False)
+gh = Github(auth=Auth.Token(Github_TOKEN))
+Data = init()

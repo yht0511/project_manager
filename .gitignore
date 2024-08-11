@@ -1,6 +1,7 @@
 __pycache__/
 data/
 tmp/
-set.py
 node_modules/
+cache/
+set.py
 repo1.py
