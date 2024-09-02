@@ -60,7 +60,19 @@ def ask_ai_for_progress(text):
     if os.path.exists(f'cache/ai/{md5}.json'):
         data=json.loads(open(f'cache/ai/{md5}.json','r',encoding="utf-8").read())
     else:
-        data=json.loads(get_chat_gpt_response(text))
+        n=1
+        while True:
+            try:
+                data=json.loads(get_chat_gpt_response(text))
+                break
+            except Exception as e:
+                print("Error: AI请求失败,不符合JSON格式!")
+                print(e)
+                print("重试中...")
+                n+=1
+            if n>3:
+                print("Error: AI请求失败,重试次数过多")
+                return 0,"Error"
         f=open(f'cache/ai/{md5}.json','w',encoding='utf-8')
         f.write(json.dumps(data))
         f.close()
@@ -88,7 +100,7 @@ def get_chat_gpt_response(prompt,system_prompt=settings.gpt_prompt,model=setting
             print("重试中...")
     res=response.json()
     print(res)
-    return res['choices'][0]['message']['content']
+    return res['choices'][0]['message']['content'].replace("\n","").replace("```json","").replace("```","")
 
 
 if not os.path.exists("cache/"):
